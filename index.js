@@ -10,6 +10,7 @@ const morgan = require("morgan");
 
 const usersRoute = require("./api/routes/users")
 const postsRoute = require("./api/routes/posts")
+const checkAuth = require('./api/middlewares/check_auth');
 
 mongoose.connect("mongodb+srv://hichem:"+ process.env.MONGO_PW +"@larva0.n0sjk.mongodb.net/myFirstDatabase?retryWrites=true&w=majority",{
     useUnifiedTopology : true,
@@ -36,15 +37,24 @@ app.use((req,res,next)=>{
     next();
 })
 
-//serve FILES
-app.get("/:media", (req, res) => {
-    res.sendFile(path.join(__dirname, "./uploads/"+req.params.media));
-  });
+
 
 //Routes to handle requests
 app.use("/users",usersRoute)
 app.use("/posts",postsRoute)
 
+
+//serve FILES
+app.get("/:media", (req, res) => {
+    res.sendFile(path.join(__dirname, "./uploads/"+req.params.media));
+  });
+
+//check Login 
+app.get("/",checkAuth,(req,res,next)=>{
+    res.status(200).json({
+        message : "Connected Successfully"
+    });
+})
 
 //Invalid route 
 app.use((req,res,next)=> {

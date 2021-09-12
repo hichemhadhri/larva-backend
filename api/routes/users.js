@@ -7,7 +7,7 @@ const bcrypt = require('bcrypt');
 const jwt  = require('jsonwebtoken')
 
 
-
+//sign up route
 router.post("/sign",async (req,res,next)=>  {
     try{
    const existingUsers = await  User.find({mail : req.body.mail}).exec();
@@ -47,7 +47,7 @@ router.post("/sign",async (req,res,next)=>  {
     }
 });
 
-
+//login route
 router.post("/login", async(req,res,next)=>{
     var error;
     try{
