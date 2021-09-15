@@ -4,7 +4,8 @@ const router = express.Router();
 const mongoose = require('mongoose')
 const User = require("../models/user")
 const bcrypt = require('bcrypt');
-const jwt  = require('jsonwebtoken')
+const jwt  = require('jsonwebtoken');
+const check_auth = require("../middlewares/check_auth");
 
 
 //sign up route
@@ -86,6 +87,32 @@ router.post("/login", async(req,res,next)=>{
         next(error)
     }
 
+
+});
+
+router.get("/:id",async (req,res,next)=> {
+    try {
+    const user = await User.findById(req.params.id).exec();   
+    console.log(user.sexe)
+    res.status(200).json({
+        id : user._id,
+        pdp : user.userPdp,
+        name : user.name, 
+        surname : user.surname, 
+        favorites : user.favorites,
+        sexe : user.sexe, 
+        pubs : user.pubs,
+        pubsPhotos : user.pubsPhotos,
+        following : user.following,
+        followers : user.followers,
+        description : user.description
+    })
+    }catch(err){
+        const error = new Error(err.message)
+        
+        error.status =  err.status
+        next(error)
+    }
 
 });
 

@@ -16,7 +16,10 @@ match : /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]
   userPdp : {type : String ,default : ""} , 
   pubsPhotos : {type : [String], default : []}, 
   pubs: {type : [ObjectId] , default : []},
-  favorites : {type : [ObjectId] , default : []}
+  favorites : {type : [ObjectId] , default : []},
+  following : {type : [ObjectId], default : []},
+  followers : {type : [ObjectId], default : []},
+  description : {type : String , default : ""}
 });
 
 
