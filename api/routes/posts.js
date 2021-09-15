@@ -38,6 +38,8 @@ const storage = multer.diskStorage({
 router.post("/new",checkAuth , upload.single("file") ,async (req,res,next)=>{
 
   try{
+    
+
     var hex ;
     const form = new FormData();
    
@@ -56,9 +58,10 @@ router.post("/new",checkAuth , upload.single("file") ,async (req,res,next)=>{
             backgroundColor : hex ,
               description : req.body.description,
               title : req.body.title,
+              contests: req.body.contests,
               domaine : req.body.domaine,
               type : req.file.mimetype,
-              authorName : req.userData.user.surname + " " + req.userData.user.surname,
+              authorName : req.userData.user.surname + " " + req.userData.user.name,
               authorPdp : req.userData.user.userPdp,
               authorRef : req.userData.user._id,
               mediaUrl : req.file.filename

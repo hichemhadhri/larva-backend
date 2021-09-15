@@ -10,6 +10,7 @@ const morgan = require("morgan");
 
 const usersRoute = require("./api/routes/users")
 const postsRoute = require("./api/routes/posts")
+const contestsRoute = require("./api/routes/contests")
 const checkAuth = require('./api/middlewares/check_auth');
 
 mongoose.connect("mongodb+srv://hichem:"+ process.env.MONGO_PW +"@larva0.n0sjk.mongodb.net/myFirstDatabase?retryWrites=true&w=majority",{
@@ -42,6 +43,7 @@ app.use((req,res,next)=>{
 //Routes to handle requests
 app.use("/users",usersRoute)
 app.use("/posts",postsRoute)
+app.use("/contests",contestsRoute)
 
 
 //serve FILES
