@@ -40,22 +40,12 @@ router.post("/new",checkAuth , upload.single("file") ,async (req,res,next)=>{
   try{
     
 
-    var hex ;
-    const form = new FormData();
-   
-    form.append("file", fs.createReadStream(req.file.path));
+
     
-     form.submit('http://127.0.0.1:8000/polls/',function(err, response) {
-      
-      if (err) throw err;
-      
-      response.resume().on('data', async (data) =>  {
-         
-          hex =  rgb2hex("rgb("+data.toString()+")").hex;
-          console.log(hex)
+    
           const post = new Post({
             _id : new mongoose.Types.ObjectId(),
-            backgroundColor : hex ,
+            backgroundColor : req.body.backgroundColor ,
               description : req.body.description,
               title : req.body.title,
               contests: req.body.contests,
@@ -68,14 +58,12 @@ router.post("/new",checkAuth , upload.single("file") ,async (req,res,next)=>{
           })
           
           var postSaved = await post.save()
-          const user = await User.findByIdAndUpdate(req.userData.user._id,{$push: { pubs: postSaved._id ,pubsPhotos : postSaved.mediaUrl }}).exec();
+          await User.findByIdAndUpdate(req.userData.user._id,{$push: { pubs: postSaved._id ,pubsPhotos : postSaved.mediaUrl }}).exec();
          
           res.status(200).json({
             result : postSaved
           })
-      });
-    });
- 
+    
   
    
   }catch(err){
