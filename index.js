@@ -13,12 +13,16 @@ const postsRoute = require("./api/routes/posts")
 const contestsRoute = require("./api/routes/contests")
 const checkAuth = require('./api/middlewares/check_auth');
 
+
+
 mongoose.connect("mongodb+srv://hichem:"+ process.env.MONGO_PW +"@larva0.n0sjk.mongodb.net/myFirstDatabase?retryWrites=true&w=majority",{
     useUnifiedTopology : true,
     useNewUrlParser : true,
     useFindAndModify: false,
     useCreateIndex: true
 })
+
+
 
 app.use(morgan("dev"));
 

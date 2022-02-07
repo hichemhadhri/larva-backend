@@ -10,6 +10,7 @@
   "author": "hichem hadhri",
   "license": "ISC",
   "dependencies": {
+    "aws-sdk": "^2.1069.0",
     "axios": "^0.21.4",
     "bcrypt": "^5.0.1",
     "body-parser": "^1.19.1",

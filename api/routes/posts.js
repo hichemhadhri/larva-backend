@@ -6,7 +6,7 @@ const Post = require("../models/post")
 const FormData = require("form-data");
 const rgb2hex = require('rgb2hex');
 const fs = require("fs")
-
+const s3 = require("../models/aws");
 
 
 
@@ -24,7 +24,7 @@ const storage = multer.diskStorage({
       cb(null, './uploads/');
     },
     filename: function(req, file, cb) {
-      cb(null, new Date().toISOString() + file.originalname);
+      cb(null,  file.originalname);
     }
   });
 
@@ -37,12 +37,20 @@ const storage = multer.diskStorage({
 //create new  post
 router.post("/new",checkAuth , upload.single("file") ,async (req,res,next)=>{
 
+  const fileStream = fs.createReadStream(req.file.path)
+  const uploadParams = {
+    Bucket : process.env.S3_BUCKET,
+    body : fileStream,
+    Key : req.file.filename
+  }
+
   try{
     
 
+          const upRes = await  s3.upload(uploadParams).promise()
 
-    
-    
+          await unlinkFile(req.file.path)
+
           const post = new Post({
             _id : new mongoose.Types.ObjectId(),
             backgroundColor : req.body.backgroundColor ,
@@ -54,7 +62,7 @@ router.post("/new",checkAuth , upload.single("file") ,async (req,res,next)=>{
               authorName : req.userData.user.surname + " " + req.userData.user.name,
               authorPdp : req.userData.user.userPdp,
               authorRef : req.userData.user._id,
-              mediaUrl : req.file.filename
+              mediaUrl : `posts/${upRes.Key}`
           })
           
           var postSaved = await post.save()
@@ -101,6 +109,9 @@ router.get("/wall",checkAuth,async (req,res,next)=>{
     next(error)
 }
 })
+
+
+
 
 
 
