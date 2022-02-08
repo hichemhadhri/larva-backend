@@ -8,6 +8,9 @@ const rgb2hex = require('rgb2hex');
 const fs = require("fs")
 const s3 = require("../models/aws");
 
+const util = require('util')
+const unlinkFile = util.promisify(fs.unlink)
+
 
 
 
@@ -40,7 +43,7 @@ router.post("/new",checkAuth , upload.single("file") ,async (req,res,next)=>{
   const fileStream = fs.createReadStream(req.file.path)
   const uploadParams = {
     Bucket : process.env.S3_BUCKET,
-    body : fileStream,
+    Body : fileStream,
     Key : req.file.filename
   }
 
@@ -48,7 +51,7 @@ router.post("/new",checkAuth , upload.single("file") ,async (req,res,next)=>{
     
 
           const upRes = await  s3.upload(uploadParams).promise()
-
+          console.log
           await unlinkFile(req.file.path)
 
           const post = new Post({
