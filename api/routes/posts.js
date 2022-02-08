@@ -114,9 +114,10 @@ router.get("/wall",checkAuth,async (req,res,next)=>{
 })
 
 
-// return post media 
-router.get("/:key",checkAuth,async (req,res,next)=>{
+// return post media (no need for checkAuth)
+router.get("/:key",async (req,res,next)=>{
   try{
+    
     const downloadParams = {
       Key: req.params.key,
       Bucket: process.env.S3_BUCKET
