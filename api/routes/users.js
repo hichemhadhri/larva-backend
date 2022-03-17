@@ -145,7 +145,7 @@ router.get("/:id",async (req,res,next)=> {
 /**
  * Change profile picture
  */
- router.put("/:id",checkAuth , upload.single("file"),async (req,res,next)=> {
+ router.post("/:id",checkAuth , upload.single("file"),async (req,res,next)=> {
     try {
         const fileStream = fs.createReadStream(req.file.path)
         const uploadParams = {
