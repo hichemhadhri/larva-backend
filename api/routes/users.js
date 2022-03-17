@@ -8,8 +8,11 @@ const jwt  = require('jsonwebtoken');
 const checkAuth = require("../middlewares/check_auth");
 const s3 = require("../models/aws");
 const multer = require('multer');
+const fs = require("fs")
 
 
+const util = require('util')
+const unlinkFile = util.promisify(fs.unlink)
 
 const storage = multer.diskStorage({
     destination: function(req, file, cb) {
@@ -170,7 +173,7 @@ router.get("/:id",async (req,res,next)=> {
 
     }catch(err){
         const error = new Error(err.message)
-        
+        console.log(error.message)
         error.status =  err.status
         next(error)
     }
