@@ -161,7 +161,7 @@ router.get("/:id",async (req,res,next)=> {
         await unlinkFile(req.file.path)
         
         const newPdp = {
-            userPdp : `users/${upRes.Key}`
+            userPdp : `users/pdp/${upRes.Key}`
         }
         //retrieve user and change pdp
         const user  = await User.findByIdAndUpdate(req.params.id,newPdp).exec()
@@ -183,7 +183,7 @@ router.get("/:id",async (req,res,next)=> {
 
 
 // return user pdp  (no need for checkAuth)
-router.get("/:key",async (req,res,next)=>{
+router.get("/pdp/:key",async (req,res,next)=>{
     try{
       
       const downloadParams = {
