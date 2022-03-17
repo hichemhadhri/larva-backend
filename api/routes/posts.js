@@ -51,7 +51,7 @@ router.post("/new",checkAuth , upload.single("file") ,async (req,res,next)=>{
     
 
           const upRes = await  s3.upload(uploadParams).promise()
-          console.log
+          
           await unlinkFile(req.file.path)
 
           const post = new Post({

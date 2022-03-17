@@ -6,6 +6,27 @@ const User = require("../models/user")
 const bcrypt = require('bcrypt');
 const jwt  = require('jsonwebtoken');
 const check_auth = require("../middlewares/check_auth");
+const s3 = require("../models/aws");
+const multer = require('multer');
+
+
+
+const storage = multer.diskStorage({
+    destination: function(req, file, cb) {
+      cb(null, './uploads/');
+    },
+    filename: function(req, file, cb) {
+      cb(null,  file.originalname);
+    }
+  });
+
+  const upload = multer({
+    storage: storage,
+  
+  });
+
+
+
 
 
 //sign up route
@@ -90,6 +111,10 @@ router.post("/login", async(req,res,next)=>{
 
 });
 
+
+/**
+ * return User with Id 'id'
+ */
 router.get("/:id",async (req,res,next)=> {
     try {
     const user = await User.findById(req.params.id).exec();   
@@ -115,6 +140,65 @@ router.get("/:id",async (req,res,next)=> {
     }
 
 });
+
+
+/**
+ * Change profile picture
+ */
+ router.post("/:id",upload.single("file"),async (req,res,next)=> {
+    try {
+        const fileStream = fs.createReadStream(req.file.path)
+        const uploadParams = {
+         Bucket : process.env.S3_USERS_BUCKET,
+         Body : fileStream,
+         Key : req.file.filename
+        }
+        
+        const upRes = await  s3.upload(uploadParams).promise();
+        await unlinkFile(req.file.path)
+        
+        const newPdp = {
+            userPdp : `users/${upRes.Key}`
+        }
+        //retrieve user and change pdp
+        const user  = await User.findByIdAndUpdate(req.params.id,newPdp).exec()
+
+        res.status(200).json({
+            message : 'Update Successful'
+        });
+
+
+    }catch(err){
+        const error = new Error(err.message)
+        
+        error.status =  err.status
+        next(error)
+    }
+
+});
+
+
+
+// return user pdp  (no need for checkAuth)
+router.get("/:key",async (req,res,next)=>{
+    try{
+      
+      const downloadParams = {
+        Key: req.params.key,
+        Bucket: process.env.S3_USERS_BUCKET
+      }
+  
+      s3.getObject(downloadParams).createReadStream().pipe(res)
+    }catch(err){
+      const error = new Error(err.message)
+      error.status = 500 
+      next(error)
+  }
+  });
+  
+  
+  
+  
 
 
 module.exports = router ; 
