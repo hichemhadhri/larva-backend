@@ -5,7 +5,7 @@ const mongoose = require('mongoose')
 const User = require("../models/user")
 const bcrypt = require('bcrypt');
 const jwt  = require('jsonwebtoken');
-const check_auth = require("../middlewares/check_auth");
+const checkAuth = require("../middlewares/check_auth");
 const s3 = require("../models/aws");
 const multer = require('multer');
 
@@ -145,7 +145,7 @@ router.get("/:id",async (req,res,next)=> {
 /**
  * Change profile picture
  */
- router.post("/:id",checkAuth , upload.single("file"),async (req,res,next)=> {
+ router.put("/:id",checkAuth , upload.single("file"),async (req,res,next)=> {
     try {
         const fileStream = fs.createReadStream(req.file.path)
         const uploadParams = {
