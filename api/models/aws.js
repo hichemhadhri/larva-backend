@@ -11,4 +11,5 @@ const s3 = new S3({
   secretAccessKey
 })
 
+
 module.exports = s3 ;

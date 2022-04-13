@@ -9,6 +9,7 @@ const checkAuth = require("../middlewares/check_auth");
 const s3 = require("../models/aws");
 const multer = require('multer');
 const fs = require("fs")
+const Post = require("../models/post")
 
 
 const util = require('util')
@@ -161,10 +162,20 @@ router.get("/:id",async (req,res,next)=> {
         await unlinkFile(req.file.path)
         
         const newPdp = {
-            userPdp : `users/pdp/${upRes.Key}`
+            userPdp : `users/${upRes.Key}`
         }
         //retrieve user and change pdp
         const user  = await User.findByIdAndUpdate(req.params.id,newPdp).exec()
+        // change pdp for each post
+        const posts = await Post.updateMany({
+            authorRef : user._id
+        }, {
+            "$set": {
+                authorPdp : `users/${upRes.Key}`
+            }
+        }, {
+            "multi": true
+        }).exec();
 
         res.status(200).json({
             message : 'Update Successful'
@@ -182,23 +193,6 @@ router.get("/:id",async (req,res,next)=> {
 
 
 
-// return user pdp from pic Id (no need for checkAuth)
-router.get("/pdp/:key",async (req,res,next)=>{
-    try{
-      
-
-      const downloadParams = {
-        Key: req.params.key,
-        Bucket: process.env.S3_USERS_BUCKET
-      }
-  
-      s3.getObject(downloadParams).createReadStream().pipe(res)
-    }catch(err){
-      const error = new Error(err.message)
-      error.status = 500 
-      next(error)
-  }
-  });
 
 
 
