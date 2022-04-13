@@ -162,7 +162,7 @@ router.get("/:id",async (req,res,next)=> {
         await unlinkFile(req.file.path)
         
         const newPdp = {
-            userPdp : `users/${upRes.Key}`
+            userPdp : `users/pdp/${upRes.Key}`
         }
         //retrieve user and change pdp
         const user  = await User.findByIdAndUpdate(req.params.id,newPdp).exec()
@@ -171,7 +171,7 @@ router.get("/:id",async (req,res,next)=> {
             authorRef : user._id
         }, {
             "$set": {
-                authorPdp : `users/${upRes.Key}`
+                authorPdp : `users/pdp/${upRes.Key}`
             }
         }, {
             "multi": true
@@ -193,18 +193,13 @@ router.get("/:id",async (req,res,next)=> {
 
 
 
-
-
-
 // return user pdp from pic Id (no need for checkAuth)
-router.get("/user/:id",async (req,res,next)=>{
+router.get("/pdp/:key",async (req,res,next)=>{
     try{
       
-        const user  = await User.findById(req.params.id).exec()
-
 
       const downloadParams = {
-        Key: user.userPdp.split('/')[2],
+        Key: req.params.key,
         Bucket: process.env.S3_USERS_BUCKET
       }
   
@@ -215,7 +210,10 @@ router.get("/user/:id",async (req,res,next)=>{
       next(error)
   }
   });
-  
+
+
+
+
   
   
   //TODO : chqnge the current method to get the pdp from posts
