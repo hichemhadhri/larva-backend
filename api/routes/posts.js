@@ -157,7 +157,7 @@ router.get("/:key",async (req,res,next)=>{
 });
 
 // return post  (no need for checkAuth)
-router.get("/:id",checkAuth,async (req,res,next)=>{
+router.get("/post/:id",checkAuth,async (req,res,next)=>{
   try {
     const post = await Post.findById(req.params.id).exec();   
     
