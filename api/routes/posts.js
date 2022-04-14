@@ -21,6 +21,7 @@ const unlinkFile = util.promisify(fs.unlink)
 const checkAuth = require('../middlewares/check_auth');
 
 const User = require("../models/user");
+const post = require("../models/post");
 
 const storage = multer.diskStorage({
     destination: function(req, file, cb) {
@@ -65,7 +66,7 @@ router.post("/new",checkAuth , upload.single("file") ,async (req,res,next)=>{
               authorName : req.userData.user.surname + " " + req.userData.user.name,
               authorPdp : req.userData.user.userPdp,
               authorRef : req.userData.user._id,
-              mediaUrl : `posts/${upRes.Key}`
+              mediaUrl : `posts/media/${upRes.Key}`
           })
           
           var postSaved = await post.save()
@@ -89,16 +90,21 @@ router.post("/new",checkAuth , upload.single("file") ,async (req,res,next)=>{
 //delete given post 
 router.delete("/:postId",checkAuth,async (req,res,next)=>{
   try{
-   await Post.findByIdAndRemove(req.params.postId).exec()
+  
+   const post = await Post.findByIdAndRemove(req.params.postId).exec()
    res.status(200).json({
      message : "post has been deleted"
    })
+   await User.findOneAndUpdate(req.userData.user._id,{$pull: { pubs: req.params.postId,pubsPhotos : post.mediaUrl }})
+   res.status(200).json({message : 'delete successfully'})
   }catch(err){
     const error = new Error(err.message)
     error.status = 500 
     next(error)
 }
 });
+
+
 
 
 //return list of posts
@@ -115,7 +121,7 @@ router.get("/wall",checkAuth,async (req,res,next)=>{
 
 
 // return post media (no need for checkAuth)
-router.get("/:key",async (req,res,next)=>{
+router.get("/media/:key",async (req,res,next)=>{
   try{
     
     const downloadParams = {
@@ -129,6 +135,20 @@ router.get("/:key",async (req,res,next)=>{
     error.status = 500 
     next(error)
 }
+});
+
+// return post  (no need for checkAuth)
+router.get("/:id",checkAuth,async (req,res,next)=>{
+  try {
+    const post = await Post.findById(req.params.id).exec();   
+    
+    res.status(200).json(post);
+    }catch(err){
+        const error = new Error(err.message)
+        
+        error.status =  err.status
+        next(error)
+    }
 });
 
 
