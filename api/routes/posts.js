@@ -104,7 +104,26 @@ router.delete("/:postId",checkAuth,async (req,res,next)=>{
 }
 });
 
-
+//dev script to change an item in a document 
+router.post('/dev',async (req,res,next)=>{
+  try{
+  
+    User.updateMany({age:{$gte:5}}, 
+      {name:"ABCD"}, function (err, docs) {
+      if (err){
+          console.log(err)
+      }
+      else{
+          console.log("Updated Docs : ", docs);
+      }
+  });
+   res.status(200).json({message : 'delete successfully'})
+  }catch(err){
+    const error = new Error(err.message)
+    error.status = 500 
+    next(error)
+}
+})
 
 
 //return list of posts
@@ -121,7 +140,7 @@ router.get("/wall",checkAuth,async (req,res,next)=>{
 
 
 // return post media (no need for checkAuth)
-router.get("/media/:key",async (req,res,next)=>{
+router.get("/:key",async (req,res,next)=>{
   try{
     
     const downloadParams = {
