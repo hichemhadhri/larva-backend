@@ -66,7 +66,7 @@ router.post("/new",checkAuth , upload.single("file") ,async (req,res,next)=>{
               authorName : req.userData.user.surname + " " + req.userData.user.name,
               authorPdp : req.userData.user.userPdp,
               authorRef : req.userData.user._id,
-              mediaUrl : `posts/media/${upRes.Key}`
+              mediaUrl : `posts/${upRes.Key}`
           })
           
           var postSaved = await post.save()
