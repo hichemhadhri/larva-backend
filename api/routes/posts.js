@@ -72,6 +72,7 @@ router.post("/new",checkAuth , upload.single("file") ,async (req,res,next)=>{
           var postSaved = await post.save()
           await User.findByIdAndUpdate(req.userData.user._id,{$push: { pubs: postSaved._id ,pubsPhotos : postSaved.mediaUrl }}).exec();
          
+          
           res.status(200).json({
             result : postSaved
           })
