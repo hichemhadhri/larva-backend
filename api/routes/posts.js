@@ -41,11 +41,13 @@ const storage = multer.diskStorage({
 //create new  post
 router.post("/new",checkAuth , upload.single("file") ,async (req,res,next)=>{
 
+
+  const id = new mongoose.Types.ObjectId();
   const fileStream = fs.createReadStream(req.file.path)
   const uploadParams = {
     Bucket : process.env.S3_BUCKET,
     Body : fileStream,
-    Key : req.file.filename
+    Key : id
   }
 
   try{
@@ -56,7 +58,7 @@ router.post("/new",checkAuth , upload.single("file") ,async (req,res,next)=>{
           await unlinkFile(req.file.path)
 
           const post = new Post({
-            _id : new mongoose.Types.ObjectId(),
+            _id : id,
             backgroundColor : req.body.backgroundColor ,
               description : req.body.description,
               title : req.body.title,
@@ -70,7 +72,7 @@ router.post("/new",checkAuth , upload.single("file") ,async (req,res,next)=>{
           })
           
           var postSaved = await post.save()
-          await User.findByIdAndUpdate(req.userData.user._id,{$push: { pubs: postSaved._id ,pubsPhotos : postSaved.mediaUrl }}).exec();
+          await User.findByIdAndUpdate(req.userData.user._id,{$push: {pubs: postSaved._id}}).exec();
          
           
           res.status(200).json({

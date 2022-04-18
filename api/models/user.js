@@ -14,7 +14,6 @@ match : /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]
   sexe  : {type : String, required : true} , 
   createdAt : { type: Date, default: Date.now },
   userPdp : {type : String ,default : ""} , 
-  pubsPhotos : {type : [String], default : []}, 
   pubs: {type : [ObjectId] , default : []},
   favorites : {type : [ObjectId] , default : []},
   following : {type : [ObjectId], default : []},
