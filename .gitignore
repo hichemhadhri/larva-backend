@@ -2,3 +2,6 @@
 
 nodemon.json
 .DS_Store
+cert.pem
+csr.pem
+key.pem

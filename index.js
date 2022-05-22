@@ -6,6 +6,8 @@ const port = 3000
 const path = require("path");
 const fs = require("fs");
 const morgan = require("morgan");
+const https = require("https");
+
 
 
 const usersRoute = require("./api/routes/users")
@@ -21,6 +23,15 @@ mongoose.connect("mongodb+srv://hichem:"+ process.env.MONGO_PW +"@larva0.n0sjk.m
     useFindAndModify: false,
     useCreateIndex: true
 })
+
+https
+  .createServer( {
+    key: fs.readFileSync("key.pem"),
+    cert: fs.readFileSync("cert.pem"),
+  },app)
+  .listen(process.env.PORT || 3000, ()=>{
+    console.log('server is runing at port '+ process.env.PORT)
+  });
 
 
 
@@ -78,4 +89,3 @@ app.use((error,req,res,next)=>{
     })
 })
 
-app.listen(process.env.PORT || 3000)
