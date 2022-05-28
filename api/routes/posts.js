@@ -63,7 +63,7 @@ router.post("/new",checkAuth , upload.single("file") ,async (req,res,next)=>{
               title : req.body.title,
               contests: req.body.contests,
               domaine : req.body.domaine,
-              type : req.file.mimetype,
+              type : req.body.type,
               authorName : req.userData.user.surname + " " + req.userData.user.name,
               authorPdp : req.userData.user.userPdp,
               authorRef : req.userData.user._id,
