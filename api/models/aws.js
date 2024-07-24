@@ -1,15 +1,16 @@
-const S3 = require('aws-sdk/clients/s3');
+const { S3Client } = require('@aws-sdk/client-s3');
+require('dotenv').config();
 
+const region = process.env.S3_REGION;
+const accessKeyId = process.env.AWS_ACCESS_KEY;
+const secretAccessKey = process.env.AWS_SECRET_KEY;
 
-const region = process.env.S3_REGION
-const accessKeyId = process.env.AWS_ACCESS_KEY
-const secretAccessKey = process.env.AWS_SECRET_KEY
-
-const s3 = new S3({
+const s3Client = new S3Client({
   region,
-  accessKeyId,
-  secretAccessKey
-})
+  credentials: {
+    accessKeyId,
+    secretAccessKey
+  }
+});
 
-
-module.exports = s3 ;
+module.exports = s3Client;

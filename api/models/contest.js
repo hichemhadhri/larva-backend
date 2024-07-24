@@ -3,21 +3,51 @@ const mongoose = require('mongoose')
 const Schema = mongoose.Schema;
 const ObjectId = Schema.ObjectId;
 
-const contestSchema = new Schema({
-  _id : ObjectId,
-  createdAt : {type : Date , default: Date.now},
-  
-  posts: {type : [ObjectId], default: []},
-  description : {type :String ,  default : ""},
-  title : {type :String , required : true},
-  domaines : {type :[String] , required : true,default:[]},
-  creatorName : {type : String , required : true},
-  creatorRef : {type : ObjectId , required : true},
-  mediaUrl : {type : String }, 
-  deadline : {type :Date , required : true}, 
-  prize : {type : String , required : true }, 
-  maximumCapcity : {type : Number , default : -1 }
-});
+
+const contestSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    required: true,
+    unique: true
+  },
+  description: {
+    type: String,
+    required: true
+  },
+  startDate: {
+    type: Date,
+    required: true
+  },
+  endDate: {
+    type: Date,
+    required: true
+  },
+  rules: {
+    type: String,
+    required: true
+  },
+  prizes: {
+    type: String,
+    required: true
+  },
+  posts: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Post'
+  }],
+  createdBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now
+  },
+  updatedAt: {
+    type: Date,
+    default: Date.now
+  }
+}, { timestamps: true });
 
 
-module.exports = mongoose.model('Contest',contestSchema) ;
+module.exports = mongoose.model('Contest', contestSchema);

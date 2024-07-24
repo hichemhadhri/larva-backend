@@ -10,15 +10,22 @@
   "author": "hichem hadhri",
   "license": "ISC",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.617.0",
+    "@aws-sdk/lib-storage": "^3.617.0",
+    "@aws-sdk/s3-request-presigner": "^3.617.0",
     "aws-sdk": "^2.1069.0",
     "axios": "^0.21.4",
     "bcrypt": "^5.0.1",
     "body-parser": "^1.19.1",
     "child-process-promise": "^2.2.1",
+    "dotenv": "^16.4.5",
     "express": "^4.17.2",
+    "ffmpeg": "^0.0.4",
+    "fluent-ffmpeg": "^2.1.3",
     "form-data": "^4.0.0",
     "jsonwebtoken": "^8.5.1",
-    "mongoose": "^5.13.14",
+    "mongoos": "^0.0.1-security",
+    "mongoose": "^8.5.1",
     "morgan": "^1.10.0",
     "multer": "^1.4.4",
     "request": "^2.88.2",
@@ -26,6 +33,7 @@
     "rgb2hex": "^0.2.5"
   },
   "devDependencies": {
+    "@ffmpeg-installer/ffmpeg": "^1.1.0",
     "nodemon": "^2.0.15"
   }
 }

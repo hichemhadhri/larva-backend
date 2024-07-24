@@ -4,219 +4,392 @@ const router = express.Router();
 const mongoose = require('mongoose')
 const User = require("../models/user")
 const bcrypt = require('bcrypt');
-const jwt  = require('jsonwebtoken');
+const jwt = require('jsonwebtoken');
 const checkAuth = require("../middlewares/check_auth");
-const s3 = require("../models/aws");
+const s3Client = require("../models/aws");
 const multer = require('multer');
 const fs = require("fs")
 const Post = require("../models/post")
 
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+
+
+const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { Readable } = require('stream');
+
+const { Upload } = require('@aws-sdk/lib-storage');
+
 
 const util = require('util')
-const unlinkFile = util.promisify(fs.unlink)
+const unlink = util.promisify(fs.unlink)
 
 const storage = multer.diskStorage({
-    destination: function(req, file, cb) {
-      cb(null, './uploads/');
+    destination: function (req, file, cb) {
+        cb(null, './uploads/');
     },
-    filename: function(req, file, cb) {
-      cb(null,  file.originalname);
+    filename: function (req, file, cb) {
+        cb(null, file.originalname);
     }
-  });
+});
 
-  const upload = multer({
+const upload = multer({
     storage: storage,
-  
-  });
+
+});
+
+
+require('dotenv').config();
 
 
 
 
 
 //sign up route
-router.post("/sign",async (req,res,next)=>  {
-    try{
-   const existingUsers = await  User.find({mail : req.body.mail}).exec();
-   if(existingUsers.length >=1){
-      const error = new Error("User with email already exists")
-      error.status = 409 ;
-      next(error);
-   }
-   else{
-    const  hashedPassword = await bcrypt.hash(req.body.password,10)
-    const newUser = new User({
-        _id : new mongoose.Types.ObjectId(),
-        mail : req.body.mail,
-        name : req.body.name,
-        surname : req.body.surname,
-        password : hashedPassword,
-        age : req.body.age,
-        sexe : req.body.sexe,
-    });
-    var user =  await newUser.save()
-    var token = await jwt.sign(
-       {user : result}
-    ,
-    process.env.JWT_KEY,{
-        expiresIn : "1d"
-    }
-    );
-    return  res.status(200).json({
-            user : user,
-            token : token
-        })
-    }   
-    }catch(err){
-        const error = new Error(err.message)
-        error.status = 500 
-        next(error)
+router.post("/sign", async (req, res, next) => {
+    try {
+        const existingUsers = await User.find({ email: req.body.email }).exec();
+        if (existingUsers.length >= 1) {
+            const error = new Error("User with email already exists");
+            error.status = 409;
+            next(error);
+        } else {
+            const hashedPassword = await bcrypt.hash(req.body.password, 10);
+            const newUser = new User({
+                email: req.body.email,
+                name: req.body.name,
+                surname: req.body.surname,
+                password: hashedPassword,
+                profilePicture: '', // Default value
+                points: 0, // Default value
+                bio: '', // Default value
+                following: [],
+                followers: [],
+                favoritePosts: []
+            });
+            const user = await newUser.save();
+            const token = jwt.sign(
+                { userId: user._id, email: user.email },
+                process.env.JWT_KEY, {
+                expiresIn: "1d"
+            });
+            return res.status(200).json({
+                user: user,
+                token: token
+            });
+        }
+    } catch (err) {
+        console.log(err);
+        const error = new Error(err.message);
+        error.status = 500;
+        next(error);
     }
 });
 
 //login route
-router.post("/login", async(req,res,next)=>{
-    var error;
-    try{
-        const user  = await User.find({mail: req.body.mail}).exec()
-        if(user.length== 0 ) {
-            error = new Error("User with email  not found ")
-            error.status = 404
-            throw error
-        } 
-            
-        const validatePassword = await bcrypt.compare(req.body.password,user[0].password)
-        if(validatePassword){
-            var token = await jwt.sign(
-               {user : user[0]}
-            ,
-            process.env.JWT_KEY,{
-                expiresIn : "1d"
+router.post("/login", async (req, res, next) => {
+    try {
+        const user = await User.find({ email: req.body.email }).exec();
+        if (user.length === 0) {
+            const error = new Error("User with email not found");
+            error.status = 404;
+            throw error;
+        }
+
+        const validatePassword = await bcrypt.compare(req.body.password, user[0].password);
+        if (validatePassword) {
+            const token = jwt.sign(
+                { userId: user[0]._id, email: user[0].email },
+                process.env.JWT_KEY, {
+                expiresIn: "1d"
             }
             );
             res.status(200).json({
-                user : user[0],
-                token : token 
-            })
-        }else{
-            error =  new Error("Password is wrong")
-            error.status= 401
-            throw error
+                user: user[0],
+                token: token
+            });
+        } else {
+            const error = new Error("Password is wrong");
+            error.status = 401;
+            throw error;
         }
-
-       
-
-    }catch(err){
-        const error = new Error(err.message)
-        
-        error.status =  err.status
-        next(error)
+    } catch (err) {
+        const error = new Error(err.message);
+        error.status = err.status || 500;
+        next(error);
     }
-
-
 });
-
 
 /**
  * return User with Id 'id'
  */
-router.get("/:id",async (req,res,next)=> {
+router.get("/:id", async (req, res, next) => {
     try {
-    const user = await User.findById(req.params.id).exec();   
-    console.log(user.sexe)
-    res.status(200).json({
-        id : user._id,
-        pdp : user.userPdp,
-        name : user.name, 
-        surname : user.surname, 
-        favorites : user.favorites,
-        sexe : user.sexe, 
-        pubs : user.pubs,
-        pubsPhotos : user.pubsPhotos,
-        following : user.following,
-        followers : user.followers,
-        description : user.description
-    })
-    }catch(err){
-        const error = new Error(err.message)
-        
-        error.status =  err.status
-        next(error)
+        const user = await User.findById(req.params.id).exec();
+        res.status(200).json({
+            id: user._id,
+            profilePicture: user.profilePicture,
+            name: user.name,
+            surname: user.surname,
+            favoritePosts: user.favoritePosts,
+            posts: user.posts,
+            following: user.following,
+            followers: user.followers,
+            points: user.points
+        });
+    } catch (err) {
+        const error = new Error(err.message);
+        error.status = err.status || 500;
+        next(error);
     }
-
 });
+
 
 
 /**
  * Change profile picture
  */
- router.put("/:id",checkAuth , upload.single("file"),async (req,res,next)=> {
+router.put("/:id/picture", checkAuth, upload.single("file"), async (req, res, next) => {
     try {
-        const fileStream = fs.createReadStream(req.file.path)
-        const uploadParams = {
-         Bucket : process.env.S3_USERS_BUCKET,
-         Body : fileStream,
-         Key : req.file.filename
+        if (req.userData.userId !== req.params.id) {
+            const error = new Error("Unauthorized");
+            error.status = 403;
+            throw error;
         }
-        
-        const upRes = await  s3.upload(uploadParams).promise();
-        await unlinkFile(req.file.path)
-        
-        const newPdp = {
-            userPdp : `users/pdp/${upRes.Key}`
-        }
-        //retrieve user and change pdp
-        const user  = await User.findByIdAndUpdate(req.params.id,newPdp).exec()
-        // change pdp for each post
-        const posts = await Post.updateMany({
-            authorRef : user._id
-        }, {
-            "$set": {
-                authorPdp : `users/pdp/${upRes.Key}`
-            }
-        }, {
-            "multi": true
-        }).exec();
 
-        res.status(200).json({
-            message : 'Update Successful'
+        const fileStream = fs.createReadStream(req.file.path);
+        const uploadParams = {
+            Bucket: process.env.S3_USERS_BUCKET,
+            Key: `users/pdp/${req.file.filename}`,
+            Body: fileStream
+        };
+
+        const upload = new Upload({
+            client: s3Client,
+            params: uploadParams
         });
 
+        const upRes = await upload.done();
+        await unlink(req.file.path);
 
-    }catch(err){
-        const error = new Error(err.message)
-        console.log(error.message)
-        error.status =  err.status
-        next(error)
+        const newProfilePicture = {
+            profilePicture: `users/pdp/${req.file.filename}` // Use the full URL of the uploaded file
+        };
+
+        // Retrieve user and change profile picture
+        const user = await User.findByIdAndUpdate(req.params.id, newProfilePicture, { new: true }).exec();
+
+        // Change profile picture for each post
+        await Post.updateMany(
+            { author: user._id },
+            { "$set": { authorProfilePicture: `users/pdp/${req.file.filename}` } }
+        ).exec();
+
+        res.status(200).json({
+            message: 'Update Successful',
+            profilePicture: user.profilePicture
+        });
+
+    } catch (err) {
+        const error = new Error(err.message);
+        console.log(error.message);
+        error.status = err.status || 500;
+        next(error);
     }
-
 });
 
 
 
-// return user pdp from pic Id (no need for checkAuth)
-router.get("/pdp/:key",async (req,res,next)=>{
-    try{
-      
+/**
+ * Return user profile picture from pic Id (no need for checkAuth)
+ */
+router.get("/pdp/:key", async (req, res, next) => {
+    try {
+        const downloadParams = {
+            Bucket: process.env.S3_USERS_BUCKET,
+            Key: `users/pdp/${req.params.key}`
+        };
 
-      const downloadParams = {
-        Key: req.params.key,
-        Bucket: process.env.S3_USERS_BUCKET
-      }
-  
-      s3.getObject(downloadParams).createReadStream().pipe(res)
-    }catch(err){
-      const error = new Error(err.message)
-      error.status = 500 
-      next(error)
-  }
-  });
+        const command = new GetObjectCommand(downloadParams);
+        const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+
+        const response = await fetch(signedUrl);
+        if (!response.ok) throw new Error(`Error fetching stream: ${response.statusText}`);
+
+        const bodyStream = Readable.from(response.body);
+
+        bodyStream.on('error', (error) => {
+            next(new Error(`Error reading stream: ${error.message}`));
+        });
+
+        bodyStream.pipe(res);
+    } catch (err) {
+        const error = new Error(err.message);
+        error.status = 500;
+        next(error);
+    }
+});
+
+
+/**
+ * Update user profile information
+ */
+router.put("/:id/profile", checkAuth, async (req, res, next) => {
+    try {
+        if (req.userData.userId !== req.params.id) {
+            const error = new Error("Unauthorized");
+            error.status = 403;
+            throw error;
+        }
+
+        const updatedProfile = {
+            name: req.body.name,
+            surname: req.body.surname,
+            bio: req.body.bio, // Add any other fields you want to allow updates for
+        };
+
+        const user = await User.findByIdAndUpdate(req.params.id, updatedProfile, { new: true }).exec();
+        res.status(200).json(user);
+    } catch (err) {
+        const error = new Error(err.message);
+        error.status = err.status || 500;
+        next(error);
+    }
+});
+
+
+/**
+ * Delete user account
+ */
+router.delete("/:id", checkAuth, async (req, res, next) => {
+    try {
+        if (req.userData.userId !== req.params.id) {
+            const error = new Error("Unauthorized");
+            error.status = 403;
+            throw error;
+        }
+
+        const user = await User.findById(req.params.id);
+        if (!user) {
+            const error = new Error("User not found");
+            error.status = 404;
+            throw error;
+        }
+
+        // This will trigger the pre-remove middleware
+        await User.findByIdAndDelete(req.params.id).exec();
+
+        res.status(200).json({ message: 'User account and associated data deleted successfully' });
+    } catch (err) {
+        const error = new Error(err.message);
+        error.status = err.status || 500;
+        next(error);
+    }
+});
+/**
+ * Follow a user
+ */
+router.post("/:id/follow", checkAuth, async (req, res, next) => {
+    try {
+        const userId = req.userData.userId;
+        const userToFollowId = req.params.id;
+
+        if (userId === userToFollowId) {
+            const error = new Error("You cannot follow yourself");
+            error.status = 400;
+            throw error;
+        }
+
+        const user = await User.findById(userId).exec();
+        const userToFollow = await User.findById(userToFollowId).exec();
+
+        if (!userToFollow) {
+            const error = new Error("User not found");
+            error.status = 404;
+            throw error;
+        }
+
+        if (!user.following.includes(userToFollowId)) {
+            user.following.push(userToFollowId);
+            userToFollow.followers.push(userId);
+
+            await user.save();
+            await userToFollow.save();
+        }
+
+        res.status(200).json({ message: "User followed successfully" });
+    } catch (err) {
+        const error = new Error(err.message);
+        error.status = err.status || 500;
+        next(error);
+    }
+});
+
+
+
+/**
+ * Unfollow a user
+ */
+router.post("/:id/unfollow", checkAuth, async (req, res, next) => {
+    try {
+        const userId = req.userData.userId;
+        const userToUnfollowId = req.params.id;
+
+        const user = await User.findById(userId).exec();
+        const userToUnfollow = await User.findById(userToUnfollowId).exec();
+
+        if (!userToUnfollow) {
+            const error = new Error("User not found");
+            error.status = 404;
+            throw error;
+        }
+
+        if (user.following.includes(userToUnfollowId)) {
+            user.following = user.following.filter(id => id.toString() !== userToUnfollowId);
+            userToUnfollow.followers = userToUnfollow.followers.filter(id => id.toString() !== userId);
+
+            await user.save();
+            await userToUnfollow.save();
+        }
+
+        res.status(200).json({ message: "User unfollowed successfully" });
+    } catch (err) {
+        const error = new Error(err.message);
+        error.status = err.status || 500;
+        next(error);
+    }
+});
+
+
+/**
+ * Get followers list
+ */
+router.get("/:id/followers", async (req, res, next) => {
+    try {
+        const user = await User.findById(req.params.id).populate('followers', 'name surname profilePicture').exec();
+        res.status(200).json(user.followers);
+    } catch (err) {
+        const error = new Error(err.message);
+        error.status = err.status || 500;
+        next(error);
+    }
+});
+
+
+/**
+ * Get following list
+ */
+router.get("/:id/following", async (req, res, next) => {
+    try {
+        const user = await User.findById(req.params.id).populate('following', 'name surname profilePicture').exec();
+        res.status(200).json(user.following);
+    } catch (err) {
+        const error = new Error(err.message);
+        error.status = err.status || 500;
+        next(error);
+    }
+});
 
 
 
 
-  
-  
-  //TODO : chqnge the current method to get the pdp from posts
-
-
-module.exports = router ; 
+module.exports = router; 

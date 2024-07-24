@@ -6,14 +6,27 @@ const Post = require("../models/post")
 const FormData = require("form-data");
 const rgb2hex = require('rgb2hex');
 const fs = require("fs")
-const s3 = require("../models/aws");
+const s3Client = require("../models/aws");
 
 const util = require('util')
-const unlinkFile = util.promisify(fs.unlink)
+const unlink = util.promisify(fs.unlink)
+const path = require("path");
+
+const { S3Client, GetObjectCommand, HeadObjectCommand } = require('@aws-sdk/client-s3');
 
 
+const { Readable } = require('stream');
+
+require('dotenv').config();
 
 
+const { Upload } = require('@aws-sdk/lib-storage');
+
+//For video Handling
+const ffmpeg = require('fluent-ffmpeg');
+const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
+
+ffmpeg.setFfmpegPath(ffmpegPath);
 
 
 
@@ -24,138 +37,257 @@ const User = require("../models/user");
 const post = require("../models/post");
 
 const storage = multer.diskStorage({
-    destination: function(req, file, cb) {
-      cb(null, './uploads/');
-    },
-    filename: function(req, file, cb) {
-      cb(null,  file.originalname);
-    }
-  });
-
-  const upload = multer({
-    storage: storage,
-  
-  });
-
-
-//create new  post
-router.post("/new",checkAuth , upload.single("file") ,async (req,res,next)=>{
-
-  const id = new mongoose.Types.ObjectId();
-  const fileStream = fs.createReadStream(req.file.path)
-  const uploadParams = {
-    Bucket : process.env.S3_BUCKET,
-    Body : fileStream,
-    Key : id.toString()
+  destination: function (req, file, cb) {
+    cb(null, './uploads/');
+  },
+  filename: function (req, file, cb) {
+    cb(null, file.originalname);
   }
+});
 
-  try{
-    
+const upload = multer({
+  storage: storage,
 
-          const upRes = await  s3.upload(uploadParams).promise()
-          
-          await unlinkFile(req.file.path)
-
-          const post = new Post({
-            _id : id,
-            backgroundColor : req.body.backgroundColor ,
-              description : req.body.description,
-              title : req.body.title,
-              contests: req.body.contests,
-              domaine : req.body.domaine,
-              type : req.body.type,
-              authorName : req.userData.user.surname + " " + req.userData.user.name,
-              authorPdp : req.userData.user.userPdp,
-              authorRef : req.userData.user._id,
-              mediaUrl : `posts/${upRes.Key}`
-          })
-          
-          var postSaved = await post.save()
-          await User.findByIdAndUpdate(req.userData.user._id,{$push: { pubs: postSaved._id ,pubsPhotos : postSaved.mediaUrl }}).exec();
-         
-          
-          res.status(200).json({
-            result : postSaved
-          })
-    
-  
-   
-  }catch(err){
-    console.log(err.message)
-    const error = new Error(err.message)
-    error.status = 500 
-    next(error)
-}
 });
 
 
-//delete given post 
-//TODO:delete from AWS as well
-router.delete("/:postId",checkAuth,async (req,res,next)=>{
-  try{
-  
-   const post = await Post.findByIdAndRemove(req.params.postId).exec()
-   res.status(200).json({
-     message : "post has been deleted"
-   })
-   await User.findOneAndUpdate(req.userData.user._id,{$pull: { pubs: req.params.postId,pubsPhotos : post.mediaUrl }})
-   res.status(200).json({message : 'delete successfully'})
-  }catch(err){
-    const error = new Error(err.message)
-    error.status = 500 
-    next(error)
-}
+router.post("/new", checkAuth, upload.single("file"), async (req, res, next) => {
+  const id = new mongoose.Types.ObjectId();
+  const filePath = req.file.path;
+  const fileExtension = filePath.split('.').pop().toLowerCase();
+  const isVideo = ['mp4', 'mov', 'avi'].includes(fileExtension);
+
+  try {
+    let mediaUrl = `${id.toString()}`;
+
+    if (isVideo) {
+      const hlsDir = `uploads/hls-${id}`;
+      fs.mkdirSync(hlsDir);
+
+      await new Promise((resolve, reject) => {
+        ffmpeg(filePath)
+          .outputOptions([
+            '-profile:v baseline',
+            '-level 3.0',
+            '-start_number 0',
+            '-hls_time 10',
+            '-hls_list_size 0',
+            '-f hls',
+            `-hls_segment_filename ${hlsDir}/${mediaUrl}-index%d.ts`
+          ])
+          .output(`${hlsDir}/index.m3u8`)
+          .on('end', resolve)
+          .on('error', reject)
+          .run();
+      });
+
+      const files = fs.readdirSync(hlsDir);
+      for (const file of files) {
+        const fileStream = fs.createReadStream(path.join(hlsDir, file));
+        const key = file.endsWith('.m3u8') ? `${mediaUrl}-${file}` : `${file}`;
+        const uploadParams = {
+          Bucket: process.env.S3_BUCKET,
+          Body: fileStream,
+          Key: key
+        };
+        const upload = new Upload({
+          client: s3Client,
+          params: uploadParams
+        });
+        await upload.done();
+      }
+
+      await unlink(filePath);
+      fs.rmdirSync(hlsDir, { recursive: true });
+
+      mediaUrl = `posts/${mediaUrl}-index.m3u8`;
+    } else {
+      const fileStream = fs.createReadStream(filePath);
+      const uploadParams = {
+        Bucket: process.env.S3_BUCKET,
+        Body: fileStream,
+        Key: mediaUrl
+      };
+
+      const upload = new Upload({
+        client: s3Client,
+        params: uploadParams
+      });
+      await upload.done();
+      await unlink(filePath);
+      mediaUrl = `posts/${mediaUrl}`;
+
+    }
+
+    const post = new Post({
+      _id: id,
+      title: req.body.title,
+      description: req.body.description,
+      author: req.userData.userId,
+      mediaUrl: mediaUrl,
+      mediaType: isVideo ? 'video' : 'image',
+      contests: req.body.contests
+    });
+
+    const postSaved = await post.save();
+    await User.findByIdAndUpdate(req.userData.userId, {
+      $push: { posts: postSaved._id }
+    }).exec();
+
+    res.status(200).json({
+      result: postSaved
+    });
+  } catch (err) {
+    console.log(err.message);
+    const error = new Error(err.message);
+    error.status = 500;
+    next(error);
+  }
 });
 
 
+/**
+ * Delete given post
+ */
+router.delete("/:postId", checkAuth, async (req, res, next) => {
+  try {
+    const postId = req.params.postId;
+    const userId = req.userData.userId;
+
+    // Find the post
+    const post = await Post.findById(postId);
+    if (!post) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+
+    // Check if the user is the owner of the post
+    if (post.author.toString() !== userId.toString()) {
+      return res.status(403).json({ message: "Not authorized to delete this post" });
+    }
+
+    // This will trigger the pre-remove middleware
+    await Post.findByIdAndDelete(postId);
+
+    res.status(200).json({ message: "Post deleted successfully" });
+  } catch (err) {
+    console.log(err.message);
+    const error = new Error(err.message);
+    error.status = 500;
+    next(error);
+  }
+});
 
 
 //return list of posts
-router.get("/wall",checkAuth,async (req,res,next)=>{
-  try{
-  const posts = await Post.find().exec()
-  res.status(200).json(posts)
-  }catch(err){
+router.get("/wall", checkAuth, async (req, res, next) => {
+  try {
+    const posts = await Post.find().exec()
+    res.status(200).json(posts)
+  } catch (err) {
     const error = new Error(err.message)
-    error.status = 500 
+    error.status = 500
     next(error)
-}
+  }
 })
 
 
-// return post media (no need for checkAuth)
-router.get("/:key",async (req,res,next)=>{
-  try{
-    
+
+
+/**
+ * Return post media (no need for checkAuth)
+ */
+router.get("/:key", async (req, res, next) => {
+  try {
+    console.log('Requested key: ' + req.params.key);
     const downloadParams = {
       Key: req.params.key,
       Bucket: process.env.S3_BUCKET
-    }
+    };
 
-    s3.getObject(downloadParams).createReadStream().pipe(res)
-  }catch(err){
-    const error = new Error(err.message)
-    error.status = 500 
-    next(error)
-}
+    // Get the object metadata to determine the content type
+    const headCommand = new HeadObjectCommand(downloadParams);
+    const headResult = await s3Client.send(headCommand);
+    const contentType = headResult.ContentType;
+
+    res.setHeader('Content-Type', contentType);
+
+    const getObjectCommand = new GetObjectCommand(downloadParams);
+    const response = await s3Client.send(getObjectCommand);
+
+    // Stream the body to the response
+    const bodyStream = response.Body;
+
+    if (bodyStream instanceof Readable) {
+      bodyStream.pipe(res).on('error', function (err) {
+        console.error('Stream error:', err);
+        next(err);
+      });
+    } else {
+      console.error('Body is not a stream:', response.Body);
+      res.status(500).json({ message: 'Error: Body is not a stream' });
+    }
+  } catch (err) {
+    console.error('Error occurred:', err);
+    const error = new Error(err.message);
+    error.status = 500;
+    next(error);
+  }
 });
 
 // return post  
-router.get("/post/:id",checkAuth,async (req,res,next)=>{
+router.get("/post/:id", checkAuth, async (req, res, next) => {
   try {
-    const post = await Post.findById(req.params.id).exec();   
-    
+    const post = await Post.findById(req.params.id).exec();
+
     res.status(200).json(post);
-    }catch(err){
-        const error = new Error(err.message)
-        
-        error.status =  err.status
-        next(error)
-    }
+  } catch (err) {
+    const error = new Error(err.message)
+
+    error.status = err.status
+    next(error)
+  }
 });
 
 
 
 
+/**
+ * Update post title and description
+ */
+router.put("/:postId", checkAuth, async (req, res, next) => {
+  try {
+    const postId = req.params.postId;
+    const userId = req.userData.userId;
+    const { title, description } = req.body;
+    console.log(req.body);
+    // Find the post
+    const post = await Post.findById(postId);
+    if (!post) {
+      return res.status(404).json({ message: "Post not found" });
+    }
 
-module.exports = router ; 
+    // Check if the user is the owner of the post
+    if (post.author.toString() !== userId.toString()) {
+      return res.status(403).json({ message: "Not authorized to update this post" });
+    }
+
+    // Update the post
+    post.title = title || post.title;
+    post.description = description || post.description;
+    post.updatedAt = Date.now();
+
+    const updatedPost = await post.save();
+
+    res.status(200).json({
+      message: "Post updated successfully",
+      post: updatedPost
+    });
+  } catch (err) {
+    console.log(err.message);
+    const error = new Error(err.message);
+    error.status = 500;
+    next(error);
+  }
+});
+
+module.exports = router; 
