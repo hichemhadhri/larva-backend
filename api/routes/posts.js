@@ -12,7 +12,7 @@ const util = require('util')
 const unlink = util.promisify(fs.unlink)
 const path = require("path");
 
-const { S3Client, GetObjectCommand, HeadObjectCommand } = require('@aws-sdk/client-s3');
+const { GetObjectCommand, HeadObjectCommand } = require('@aws-sdk/client-s3');
 
 
 const { Readable } = require('stream');
@@ -35,6 +35,7 @@ const checkAuth = require('../middlewares/check_auth');
 
 const User = require("../models/user");
 const post = require("../models/post");
+const Contest = require("../models/contest");
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -50,7 +51,9 @@ const upload = multer({
 
 });
 
-
+/**
+ * Create a new post
+  */
 router.post("/new", checkAuth, upload.single("file"), async (req, res, next) => {
   const id = new mongoose.Types.ObjectId();
   const filePath = req.file.path;
@@ -98,7 +101,7 @@ router.post("/new", checkAuth, upload.single("file"), async (req, res, next) => 
       }
 
       await unlink(filePath);
-      fs.rmdirSync(hlsDir, { recursive: true });
+      fs.rmSync(hlsDir, { recursive: true });
 
       mediaUrl = `posts/${mediaUrl}-index.m3u8`;
     } else {
@@ -119,6 +122,8 @@ router.post("/new", checkAuth, upload.single("file"), async (req, res, next) => 
 
     }
 
+
+
     const post = new Post({
       _id: id,
       title: req.body.title,
@@ -126,10 +131,31 @@ router.post("/new", checkAuth, upload.single("file"), async (req, res, next) => 
       author: req.userData.userId,
       mediaUrl: mediaUrl,
       mediaType: isVideo ? 'video' : 'image',
-      contests: req.body.contests
+      contests: req.body.contests,
+      domains: req.body.domains,
+      backgroundColor: req.body.backgroundColor,
     });
 
     const postSaved = await post.save();
+
+    await Contest.updateMany(
+      { _id: { $in: Array.isArray(req.body.contests) ? req.body.contests : [req.body.contests] } },
+      { $push: { posts: postSaved._id } }
+    );
+
+    // add the user to users field of the contests
+    await Contest.updateMany(
+      { _id: { $in: Array.isArray(req.body.contests) ? req.body.contests : [req.body.contests] } },
+      { $addToSet: { users: req.userData.userId } }
+    );
+
+    // Add contests to the user's joinedContests field if not already present
+    await User.findByIdAndUpdate(req.userData.userId, {
+      $addToSet: { joinedContests: { $each: Array.isArray(req.body.contests) ? req.body.contests : [req.body.contests] } }
+    });
+
+
+
     await User.findByIdAndUpdate(req.userData.userId, {
       $push: { posts: postSaved._id }
     }).exec();
@@ -249,8 +275,6 @@ router.get("/post/:id", checkAuth, async (req, res, next) => {
 });
 
 
-
-
 /**
  * Update post title and description
  */
@@ -289,5 +313,106 @@ router.put("/:postId", checkAuth, async (req, res, next) => {
     next(error);
   }
 });
+
+
+/**
+ * rate a post
+ */
+router.post("/rate/:postId", checkAuth, async (req, res, next) => {
+  try {
+    console.log(req.body);
+    const postId = req.params.postId;
+    const userId = req.userData.userId;
+
+    const rating = req.body.rating;
+    const timespent = req.body.timespent;
+
+    // rating must be between 1 and 5
+    if (rating < 1 || rating > 5) {
+      return res.status(400).json({ message: "Rating must be between 1 and 5" });
+    }
+
+    // Find the post
+    const post = await Post.findById(postId);
+    if (!post) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+
+    // Check if the user has already rated the post
+    const userRating = post.ratings.find(rating => rating.user.toString() === userId.toString());
+    if (userRating) {
+      return res.status(403).json({ message: "User has already rated this post" });
+    }
+
+    // Add the rating
+    post.ratings.push({ user: userId, rating: rating, timespent: timespent });
+    post.averageRating = post.ratings.reduce((acc, curr) => acc + curr.rating, 0) / post.ratings.length;
+    post.averageTimeSpent = post.ratings.reduce((acc, curr) => acc + curr.timespent, 0) / post.ratings.length;
+
+    const updatedPost = await post.save();
+
+    // Add the rating to the user's ratings field
+    const user = await User.findById(userId);
+    user.ratings.push({ post: postId, rating: rating });
+    await user.save();
+
+    res.status(200).json({
+      message: "Post rated successfully",
+      post: updatedPost
+    });
+  } catch (err) {
+    console.log(err.message);
+    const error = new Error(err.message);
+    error.status = 500;
+    next(error);
+  }
+});
+
+/**
+ * Get all posts by a user
+ */
+router.get("/user/:userId", checkAuth, async (req, res, next) => {
+  try {
+    const posts = await Post.find({ author: req.params.userId }).exec();
+    res.status(200).json(posts);
+  } catch (err) {
+    const error = new Error(err.message);
+    error.status = 500;
+    next(error);
+  }
+}
+);
+
+
+/**
+ * Add post to user's favoritePosts
+ */
+router.post("/favorite/:postId", checkAuth, async (req, res, next) => {
+  try {
+    const postId = req.params.postId;
+    const userId = req.userData.userId;
+
+    // Add the post to the user's favoritePosts if it's not already present
+    await User.findByIdAndUpdate(userId, {
+      $addToSet: { favoritePosts: postId }
+    });
+
+    // Add the user to the post's fans if not already present
+    await Post.findByIdAndUpdate(postId, {
+      $addToSet: { fans: userId }
+    });
+
+
+    res.status(200).json({
+      message: "Post added to favorites successfully"
+    });
+  } catch (err) {
+    console.log(err.message);
+    const error = new Error(err.message);
+    error.status = 500;
+    next(error);
+  }
+});
+
 
 module.exports = router; 

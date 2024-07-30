@@ -14,6 +14,10 @@ const contestSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  mediaUrl: {
+    type: String,
+    required: false
+  },
   startDate: {
     type: Date,
     required: true
@@ -39,6 +43,10 @@ const contestSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
+  users: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
   createdAt: {
     type: Date,
     default: Date.now

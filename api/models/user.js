@@ -2,6 +2,10 @@ const mongoose = require('mongoose')
 
 const Schema = mongoose.Schema;
 const ObjectId = Schema.ObjectId;
+const Post = require("../models/post")
+const { DeleteObjectCommand } = require('@aws-sdk/client-s3');
+const s3Client = require("../models/aws");
+
 
 // const UserSchema = new Schema({
 //   _id : ObjectId,
@@ -58,10 +62,19 @@ const userSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Contest'
   }],
-  points: {
-    type: Number,
-    default: 0
-  },
+  ratings: [{
+    post: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Post',
+      required: true
+    },
+    rating: {
+      type: Number,
+      min: 1,
+      max: 5,
+      required: true
+    }
+  }],
   following: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
@@ -81,7 +94,11 @@ const userSchema = new mongoose.Schema({
   updatedAt: {
     type: Date,
     default: Date.now
-  }
+  },
+  createdContests: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Contest'
+  }]
 }, { timestamps: true });
 
 

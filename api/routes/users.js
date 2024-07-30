@@ -126,15 +126,8 @@ router.get("/:id", async (req, res, next) => {
     try {
         const user = await User.findById(req.params.id).exec();
         res.status(200).json({
-            id: user._id,
-            profilePicture: user.profilePicture,
-            name: user.name,
-            surname: user.surname,
-            favoritePosts: user.favoritePosts,
-            posts: user.posts,
-            following: user.following,
-            followers: user.followers,
-            points: user.points
+            user: user
+
         });
     } catch (err) {
         const error = new Error(err.message);

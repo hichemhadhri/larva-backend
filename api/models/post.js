@@ -4,6 +4,7 @@ const Schema = mongoose.Schema;
 const ObjectId = Schema.ObjectId;
 
 
+
 const postSchema = new mongoose.Schema({
   title: {
     type: String,
@@ -20,7 +21,7 @@ const postSchema = new mongoose.Schema({
   },
   mediaUrl: {
     type: String,
-    required: true
+    required: false
   },
   mediaType: {
     type: String,
@@ -42,9 +43,17 @@ const postSchema = new mongoose.Schema({
       min: 1,
       max: 5,
       required: true
+    },
+    timespent: {
+      type: Number,
+      required: true
     }
   }],
   averageRating: {
+    type: Number,
+    default: 0
+  },
+  averageTimeSpent: {
     type: Number,
     default: 0
   },
@@ -55,12 +64,24 @@ const postSchema = new mongoose.Schema({
   updatedAt: {
     type: Date,
     default: Date.now
+  },
+  fans: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
+  domains: [{
+    type: String
+  }],
+  backgroundColor: {
+    type: String,
+    default: '#000000'
   }
+
 }, { timestamps: true });
 
 const { DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const s3Client = require("../models/aws");
-const User = require("../models/user");
+
 
 
 postSchema.pre('findOneAndDelete', async function (next) {
@@ -69,7 +90,7 @@ postSchema.pre('findOneAndDelete', async function (next) {
 
     // Delete the post file from S3
     if (post.mediaUrl) {
-      const key = post.mediaUrl;
+      const key = post.mediaUrl.split('/').pop();
       const deleteParams = {
         Bucket: process.env.S3_BUCKET,
         Key: key
@@ -77,11 +98,14 @@ postSchema.pre('findOneAndDelete', async function (next) {
       const command = new DeleteObjectCommand(deleteParams);
       await s3Client.send(command);
     }
+    // Delay requiring the User model to avoid circular dependency
+    const User = require('./user');
 
     // Remove the post reference from the user's posts array
     await User.findByIdAndUpdate(post.author, {
       $pull: { posts: post._id }
     });
+
 
     next();
   } catch (err) {
