@@ -8,6 +8,7 @@ const rgb2hex = require('rgb2hex');
 const fs = require("fs")
 const s3Client = require("../models/aws");
 
+
 const util = require('util')
 const unlink = util.promisify(fs.unlink)
 const path = require("path");
@@ -53,12 +54,18 @@ const upload = multer({
 
 /**
  * Create a new post
-  */
-router.post("/new", checkAuth, upload.single("file"), async (req, res, next) => {
+ */
+router.post('/new', checkAuth, upload.fields([{ name: 'file' }, { name: 'thumbnail' }]), async (req, res, next) => {
   const id = new mongoose.Types.ObjectId();
-  const filePath = req.file.path;
+  const filePath = req.files['file'][0].path;
   const fileExtension = filePath.split('.').pop().toLowerCase();
   const isVideo = ['mp4', 'mov', 'avi'].includes(fileExtension);
+  let thumbnailUrl = '';
+
+  const contests = JSON.parse(req.body.contests); // This is a stringified JSON object
+
+
+
 
   try {
     let mediaUrl = `${id.toString()}`;
@@ -76,7 +83,7 @@ router.post("/new", checkAuth, upload.single("file"), async (req, res, next) => 
             '-hls_time 10',
             '-hls_list_size 0',
             '-f hls',
-            `-hls_segment_filename ${hlsDir}/${mediaUrl}-index%d.ts`
+            `-hls_segment_filename ${hlsDir}/${mediaUrl}-index%d.ts`,
           ])
           .output(`${hlsDir}/index.m3u8`)
           .on('end', resolve)
@@ -91,11 +98,11 @@ router.post("/new", checkAuth, upload.single("file"), async (req, res, next) => 
         const uploadParams = {
           Bucket: process.env.S3_BUCKET,
           Body: fileStream,
-          Key: key
+          Key: key,
         };
         const upload = new Upload({
           client: s3Client,
-          params: uploadParams
+          params: uploadParams,
         });
         await upload.done();
       }
@@ -104,22 +111,40 @@ router.post("/new", checkAuth, upload.single("file"), async (req, res, next) => 
       fs.rmSync(hlsDir, { recursive: true });
 
       mediaUrl = `posts/${mediaUrl}-index.m3u8`;
+
+      if (req.files['thumbnail']) {
+        const thumbnailPath = req.files['thumbnail'][0].path;
+        const thumbnailStream = fs.createReadStream(thumbnailPath);
+        const thumbnailKey = `${id.toString()}-thumbnail.jpg`;
+        const thumbnailUploadParams = {
+          Bucket: process.env.S3_BUCKET,
+          Body: thumbnailStream,
+          Key: thumbnailKey,
+        };
+        const thumbnailUpload = new Upload({
+          client: s3Client,
+          params: thumbnailUploadParams,
+        });
+        await thumbnailUpload.done();
+        await unlink(thumbnailPath);
+        thumbnailUrl = `posts/${thumbnailKey}`;
+      }
     } else {
       const fileStream = fs.createReadStream(filePath);
       const uploadParams = {
         Bucket: process.env.S3_BUCKET,
         Body: fileStream,
-        Key: mediaUrl
+        Key: mediaUrl,
       };
 
       const upload = new Upload({
         client: s3Client,
-        params: uploadParams
+        params: uploadParams,
       });
       await upload.done();
       await unlink(filePath);
       mediaUrl = `posts/${mediaUrl}`;
-
+      thumbnailUrl = mediaUrl; // For images, the thumbnail is the image itself
     }
 
 
@@ -131,7 +156,8 @@ router.post("/new", checkAuth, upload.single("file"), async (req, res, next) => 
       author: req.userData.userId,
       mediaUrl: mediaUrl,
       mediaType: isVideo ? 'video' : 'image',
-      contests: req.body.contests,
+      thumbnail: thumbnailUrl,
+      contests: contests,
       domains: req.body.domains,
       backgroundColor: req.body.backgroundColor,
     });
@@ -139,22 +165,18 @@ router.post("/new", checkAuth, upload.single("file"), async (req, res, next) => 
     const postSaved = await post.save();
 
     await Contest.updateMany(
-      { _id: { $in: Array.isArray(req.body.contests) ? req.body.contests : [req.body.contests] } },
+      { _id: { $in: contests } },
       { $push: { posts: postSaved._id } }
     );
 
-    // add the user to users field of the contests
     await Contest.updateMany(
-      { _id: { $in: Array.isArray(req.body.contests) ? req.body.contests : [req.body.contests] } },
+      { _id: { $in: contests } },
       { $addToSet: { users: req.userData.userId } }
     );
 
-    // Add contests to the user's joinedContests field if not already present
     await User.findByIdAndUpdate(req.userData.userId, {
-      $addToSet: { joinedContests: { $each: Array.isArray(req.body.contests) ? req.body.contests : [req.body.contests] } }
+      $addToSet: { joinedContests: { $each: contests } }
     });
-
-
 
     await User.findByIdAndUpdate(req.userData.userId, {
       $push: { posts: postSaved._id }

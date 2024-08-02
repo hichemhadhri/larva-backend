@@ -37,7 +37,10 @@ const upload = multer({
  */
 router.post("/new", checkAuth, upload.single("file"), async (req, res, next) => {
   try {
+    let mediaUrl = '';
+
     if (req.file) {
+      const fileStream = fs.createReadStream(req.file.path);
 
       const uploadParams = {
         Bucket: process.env.S3_BUCKET,
@@ -52,7 +55,9 @@ router.post("/new", checkAuth, upload.single("file"), async (req, res, next) => 
 
       const upRes = await upload.done();
       await unlink(req.file.path);
+      mediaUrl = `contests/${req.file.filename}`;
     }
+
     const contest = new Contest({
       name: req.body.name,
       description: req.body.description,
@@ -61,7 +66,7 @@ router.post("/new", checkAuth, upload.single("file"), async (req, res, next) => 
       rules: req.body.rules,
       prizes: req.body.prizes,
       createdBy: req.userData.userId,
-      mediaUrl: req.file ? `constests/${req.file.filename}` : ''
+      mediaUrl: mediaUrl
     });
 
     const contestSaved = await contest.save();
@@ -81,7 +86,6 @@ router.post("/new", checkAuth, upload.single("file"), async (req, res, next) => 
     next(error);
   }
 });
-
 /**
  * Delete given contest
  */
@@ -130,6 +134,7 @@ router.delete("/:contestId", checkAuth, async (req, res, next) => {
 });
 
 
+
 router.get('/all', checkAuth, async (req, res, next) => {
   try {
     const contests = await Contest.find().exec()
@@ -145,7 +150,7 @@ router.get('/all', checkAuth, async (req, res, next) => {
 })
 
 //contest details
-router.get("/:contestId", checkAuth, async (req, res, next) => {
+router.get("/contest/:contestId", checkAuth, async (req, res, next) => {
   try {
     const contest = await Contest.findById(req.params.contestId).exec()
 
@@ -172,7 +177,49 @@ router.get("/posts/:contestId", checkAuth, async (req, res, next) => {
     next(error)
   }
 })
+const { GetObjectCommand, HeadObjectCommand } = require('@aws-sdk/client-s3');
+const { Readable } = require('stream');
 
+/**
+ * Return post media (no need for checkAuth)
+ */
+router.get("/:key", async (req, res, next) => {
+  try {
+    console.log('Requested key: ' + req.params.key);
+    const downloadParams = {
+      Key: req.params.key,
+      Bucket: process.env.S3_BUCKET
+    };
+
+    // Get the object metadata to determine the content type
+    const headCommand = new HeadObjectCommand(downloadParams);
+    const headResult = await s3Client.send(headCommand);
+    const contentType = headResult.ContentType;
+
+    res.setHeader('Content-Type', contentType);
+
+    const getObjectCommand = new GetObjectCommand(downloadParams);
+    const response = await s3Client.send(getObjectCommand);
+
+    // Stream the body to the response
+    const bodyStream = response.Body;
+
+    if (bodyStream instanceof Readable) {
+      bodyStream.pipe(res).on('error', function (err) {
+        console.error('Stream error:', err);
+        next(err);
+      });
+    } else {
+      console.error('Body is not a stream:', response.Body);
+      res.status(500).json({ message: 'Error: Body is not a stream' });
+    }
+  } catch (err) {
+    console.error('Error occurred:', err);
+    const error = new Error(err.message);
+    error.status = 500;
+    next(error);
+  }
+});
 
 /**
  * Return top 10 posts of a contest

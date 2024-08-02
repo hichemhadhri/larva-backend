@@ -75,7 +75,9 @@ const postSchema = new mongoose.Schema({
   backgroundColor: {
     type: String,
     default: '#000000'
-  }
+  },
+  thumbnail: { type: String, default: '' }, // New field for thumbnail URL
+
 
 }, { timestamps: true });
 
