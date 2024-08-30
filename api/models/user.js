@@ -5,25 +5,8 @@ const ObjectId = Schema.ObjectId;
 const Post = require("../models/post")
 const { DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const s3Client = require("../models/aws");
+const contest = require('./contest');
 
-
-// const UserSchema = new Schema({
-//   _id : ObjectId,
-//   mail : {type : String, required : true , unique : true ,
-// match : /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/},
-//   name : {type : String, required : true} , 
-//   surname : {type : String, required : true} , 
-//   password : {type : String, required : true} , 
-//   age : { type: Number, min: 18, max: 65 },
-//   sexe  : {type : String, required : true} , 
-//   createdAt : { type: Date, default: Date.now },
-//   userPdp : {type : String ,default : ""} , 
-//   pubs: {type : [ObjectId] ,  default : []},
-//   favorites : {type : [ObjectId] , default : []},
-//   following : {type : [ObjectId], default : []},
-//   followers : {type : [ObjectId], default : []},
-//   description : {type : String , default : ""}
-// });
 
 
 
@@ -84,8 +67,14 @@ const userSchema = new mongoose.Schema({
     ref: 'User'
   }],
   favoritePosts: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Post'
+    post: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Post',
+    },
+    contest: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Contest',
+    }
   }],
   createdAt: {
     type: Date,

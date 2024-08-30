@@ -56,7 +56,12 @@ app.use("/contests", contestsRoute)
 
 //check Login 
 app.get("/", checkAuth, (req, res, next) => {
+
+
+
+
     res.status(200).json({
+        user: req.userData,
         message: "Connected Successfully"
     });
 })

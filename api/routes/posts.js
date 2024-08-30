@@ -226,18 +226,23 @@ router.delete("/:postId", checkAuth, async (req, res, next) => {
 });
 
 
-//return list of posts
+// Return list of posts
 router.get("/wall", checkAuth, async (req, res, next) => {
   try {
-    const posts = await Post.find().exec()
-    res.status(200).json(posts)
-  } catch (err) {
-    const error = new Error(err.message)
-    error.status = 500
-    next(error)
-  }
-})
+    const posts = await Post.find()
+      .populate({
+        path: 'contests',
+        select: 'name' // Only populate the 'name' field of contests
+      })
+      .exec();
 
+    res.status(200).json(posts);
+  } catch (err) {
+    const error = new Error(err.message);
+    error.status = 500;
+    next(error);
+  }
+});
 
 
 
@@ -282,17 +287,27 @@ router.get("/:key", async (req, res, next) => {
   }
 });
 
-// return post  
+// Return a specific post by Id
 router.get("/post/:id", checkAuth, async (req, res, next) => {
   try {
-    const post = await Post.findById(req.params.id).exec();
+    const post = await Post.findById(req.params.id)
+      .populate({
+        path: 'contests',
+        select: 'name' // Only populate the 'name' field of contests
+      })
+      .exec();
+
+    if (!post) {
+      const error = new Error("Post not found");
+      error.status = 404;
+      throw error;
+    }
 
     res.status(200).json(post);
   } catch (err) {
-    const error = new Error(err.message)
-
-    error.status = err.status
-    next(error)
+    const error = new Error(err.message);
+    error.status = err.status || 500;
+    next(error);
   }
 });
 
@@ -406,24 +421,49 @@ router.get("/user/:userId", checkAuth, async (req, res, next) => {
 );
 
 
-/**
- * Add post to user's favoritePosts
- */
-router.post("/favorite/:postId", checkAuth, async (req, res, next) => {
+// Add post to user's favoritePosts
+router.post("/favorite", checkAuth, async (req, res, next) => {
   try {
-    const postId = req.params.postId;
+    const postId = req.body.postId;
+    const contestId = req.body.contestId;
     const userId = req.userData.userId;
 
-    // Add the post to the user's favoritePosts if it's not already present
-    await User.findByIdAndUpdate(userId, {
-      $addToSet: { favoritePosts: postId }
-    });
+    // Find the user
+    const user = await User.findById(userId).exec();
 
-    // Add the user to the post's fans if not already present
+    // Log the types to verify they're the same
+    console.log('contestId type:', typeof contestId);
+    console.log('favorite.contest type:', typeof user.favoritePosts[0]?.contest);
+
+    // Ensure contestId is a string
+    const contestIdStr = contestId.toString();
+
+    // Find the previous favorite post for the same contest
+    const previousFavorite = user.favoritePosts.find(favorite => favorite.contest.toString() === contestIdStr);
+
+    // Remove any existing favorite post for the same contest
+    user.favoritePosts = user.favoritePosts.filter(favorite => favorite.contest.toString() !== contestIdStr);
+
+    console.log('Filtered favoritePosts:', user.favoritePosts);
+    console.log('contestId:', contestIdStr);
+
+    // Add the new favorite post
+    user.favoritePosts.push({ post: postId, contest: contestIdStr });
+
+    // Save the updated user document
+    await user.save();
+
+    // Remove the user from the fans of the previous favorite post if it exists
+    if (previousFavorite) {
+      await Post.findByIdAndUpdate(previousFavorite.post, {
+        $pull: { fans: userId }
+      });
+    }
+
+    // Add the user to the new post's fans if not already present
     await Post.findByIdAndUpdate(postId, {
       $addToSet: { fans: userId }
     });
-
 
     res.status(200).json({
       message: "Post added to favorites successfully"

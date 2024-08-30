@@ -53,6 +53,7 @@ router.post("/sign", async (req, res, next) => {
             error.status = 409;
             next(error);
         } else {
+            console.log(req.body.email);
             const hashedPassword = await bcrypt.hash(req.body.password, 10);
             const newUser = new User({
                 email: req.body.email,
@@ -136,6 +137,69 @@ router.get("/:id", async (req, res, next) => {
     }
 });
 
+/**
+ * return User's posts with Id 'id'
+ */
+router.get("/:id/posts", async (req, res, next) => {
+    try {
+        const user = await User.findById(req.params.id).populate({
+            path: 'posts',
+            model: 'Post',
+            populate: {
+                path: 'contests',
+                model: 'Contest',
+                select: 'name'
+            }
+        }).exec();
+
+        if (!user) {
+            const error = new Error("User not found");
+            error.status = 404;
+            throw error;
+        }
+
+        const posts = user.posts; // Directly access the populated posts
+
+        res.status(200).json(posts);
+    } catch (err) {
+        const error = new Error(err.message);
+        error.status = err.status || 500;
+        next(error);
+    }
+});
+
+
+
+/**
+ * Return user's favorite posts
+ */
+router.get("/:id/favorites", async (req, res, next) => {
+    try {
+        const user = await User.findById(req.params.id).populate({
+            path: 'favoritePosts.post',
+            model: 'Post',
+            populate: {
+                path: 'contests',
+                model: 'Contest',
+                select: 'name'
+            }
+        }).exec();
+
+        if (!user) {
+            const error = new Error("User not found");
+            error.status = 404;
+            throw error;
+        }
+
+        const favoritePosts = user.favoritePosts.map(favorite => favorite.post);
+
+        res.status(200).json(favoritePosts);
+    } catch (err) {
+        const error = new Error(err.message);
+        error.status = err.status || 500;
+        next(error);
+    }
+});
 
 
 /**
@@ -285,6 +349,8 @@ router.post("/:id/follow", checkAuth, async (req, res, next) => {
     try {
         const userId = req.userData.userId;
         const userToFollowId = req.params.id;
+
+        console.log(userId, userToFollowId);
 
         if (userId === userToFollowId) {
             const error = new Error("You cannot follow yourself");
